@@ -1,9 +1,26 @@
+// =============================================================================
+// UnityExternals.cpp
+// Modified for Local Terrain Pipeline (offline Blob-based tile serving).
+//
+// [BLOB-ADDED] marks lines added for the local terrain pipeline.
+//
+// Part 3: Added #include for BlobAssetResponse.h / BlobAssetRequest.h
+//         Added _blobPart3SanityCheck() for compile-time verification.
+// Part 7: BlobAssetAccessor inserted as outermost wrapper of accessor chain.
+// =============================================================================
+
 #include "UnityExternals.h"
 
 #include "UnityEmscriptenAssetAccessor.h"
 #include "UnityPrepareRendererResources.h"
 #include "UnityTaskProcessor.h"
 #include "UnityWebRequestAssetAccessor.h"
+
+// [BLOB-ADDED] Part 3
+#include "BlobAssetRequest.h"
+#include "BlobAssetResponse.h"
+// [BLOB-ADDED] Part 7
+#include "BlobAssetAccessor.h"
 
 #include <Cesium3DTilesSelection/Tileset.h>
 #include <CesiumAsync/AsyncSystem.h>
@@ -57,6 +74,42 @@ std::shared_ptr<UnityWebRequestAssetAccessor> pWebRequestAccessor = nullptr;
 
 void shutdownExternals();
 
+// [BLOB-ADDED] Part 3: Compile-time verification only. Never called at runtime.
+void _blobPart3SanityCheck() {
+  static const std::byte dummy[8] = {
+      std::byte{0x54},
+      std::byte{0x45},
+      std::byte{0x52},
+      std::byte{0x52},
+      std::byte{0x42},
+      std::byte{0x4C},
+      std::byte{0x4F},
+      std::byte{0x42}};
+
+  BlobAssetResponse terrainResp(dummy, 8, "http://local-blob/6/108/45.terrain");
+  assert(terrainResp.statusCode() == 200);
+  assert(terrainResp.contentType() == "application/vnd.quantized-mesh");
+  assert(terrainResp.data().size() == 8);
+
+  BlobAssetResponse pngResp(dummy, 8, "http://local-blob/7/217/91.png");
+  assert(pngResp.contentType() == "image/png");
+
+  BlobAssetResponse jsonResp(dummy, 8, "http://local-blob/layer.json");
+  assert(jsonResp.contentType() == "application/json");
+
+  BlobAssetResponse xmlResp(dummy, 8, "http://local-blob/tilemapresource.xml");
+  assert(xmlResp.contentType() == "application/xml");
+
+  BlobAssetRequest req("http://local-blob/6/108/45.terrain", dummy, 8);
+  assert(req.method() == "GET");
+  assert(req.url() == "http://local-blob/6/108/45.terrain");
+  assert(req.response() != nullptr);
+  assert(req.response()->statusCode() == 200);
+  assert(req.response()->data().size() == 8);
+  assert(req.response()->contentType() == "application/vnd.quantized-mesh");
+}
+// [BLOB-ADDED] Part 3 end
+
 } // namespace
 
 void initializeExternals() {
@@ -81,7 +134,19 @@ void initializeExternals() {
         std::make_shared<UnityWebRequestAssetAccessor>();
 #endif
 
-    pAccessor = std::make_shared<GunzipAssetAccessor>(
+    // [BLOB-ADDED] Part 7: BlobAssetAccessor wraps the entire HTTP chain.
+    //
+    // Chain order (outermost -> innermost):
+    //   BlobAssetAccessor          <- intercepts local-blob URLs
+    //     GunzipAssetAccessor      <- decompresses HTTP responses
+    //       CachingAssetAccessor   <- SQLite disk cache
+    //         UnityWebRequestAccessor <- actual HTTP
+    //
+    // IMPORTANT: BlobAssetAccessor MUST be outside GunzipAssetAccessor.
+    // TERRBLOB/IMGEBLOB data is already raw (not gzip-compressed).
+    // If placed inside, GunzipAssetAccessor would attempt to decompress
+    // raw tile bytes and fail.
+    auto httpChain = std::make_shared<GunzipAssetAccessor>(
         std::make_shared<CachingAssetAccessor>(
             spdlog::default_logger(),
             pWebRequestAccessor,
@@ -90,6 +155,9 @@ void initializeExternals() {
                 cacheDBPath,
                 maxItems),
             requestsPerCachePrune));
+
+    pAccessor = std::make_shared<BlobAssetAccessor>(httpChain);
+    // [BLOB-ADDED] Part 7 end
 
     pTaskProcessor = std::make_shared<UnityTaskProcessor>();
     asyncSystem.emplace(pTaskProcessor);
