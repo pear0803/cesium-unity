@@ -58,11 +58,19 @@ private:
         url.substr(url.size() - 8) == ".terrain") {
       return "application/vnd.quantized-mesh";
     }
-    // .png 확장자 → 이미지
-    if (url.size() >= 4 &&
-        url.substr(url.size() - 4) == ".png") {
+
+    #if defined(CESIUM_LOCAL_IMAGERY_WEBP) && CESIUM_LOCAL_IMAGERY_WEBP
+    // WebP mode
+    if (url.size() >= 5 && url.substr(url.size() - 5) == ".webp") {
+      return "image/webp";
+    }
+#else
+    // PNG mode
+    if (url.size() >= 4 && url.substr(url.size() - 4) == ".png") {
       return "image/png";
     }
+#endif
+
     // layer.json
     if (url.find("layer.json") != std::string_view::npos) {
       return "application/json";

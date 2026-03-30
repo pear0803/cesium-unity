@@ -51,6 +51,17 @@ int g_imageryBlobSizes[4] = {0, 0, 0, 0};
 // ============================================================
 namespace {
 
+// Imagery format selection (build-time)
+#if defined(CESIUM_LOCAL_IMAGERY_WEBP) && CESIUM_LOCAL_IMAGERY_WEBP
+static constexpr const char* kImageryExt = ".webp";
+static constexpr const char* kImageryMime = "image/webp";
+static constexpr const char* kImageryExtNoDot = "webp";
+#else
+static constexpr const char* kImageryExt = ".png";
+static constexpr const char* kImageryMime = "image/png";
+static constexpr const char* kImageryExtNoDot = "png";
+#endif
+
 template <typename T> T readLE(const std::byte* base, std::size_t offset) {
   T value{};
   std::memcpy(&value, base + offset, sizeof(T));
@@ -263,7 +274,7 @@ bool BlobAssetAccessor::matchImageryTile(
 
   std::string url = stripQuery(rawUrl);
 
-  const std::string ext = ".png";
+  const std::string ext = kImageryExt;
   if (url.size() < ext.size())
     return false;
   if (url.substr(url.size() - ext.size()) != ext)
@@ -355,7 +366,10 @@ const std::vector<std::byte>& BlobAssetAccessor::getTileMapResourceXml() {
                           "maxx=\"132.0\" maxy=\"43.0\"/>\n"
                           "  <Origin x=\"-180.0\" y=\"-90.0\"/>\n"
                           "  <TileFormat width=\"512\" height=\"512\" "
-                          "mime-type=\"image/png\" extension=\"png\"/>\n"
+                          "mime-type=\"" +
+                          std::string(kImageryMime) + "\" extension=\"" +
+                          std::string(kImageryExtNoDot) +
+                          "\"/>\n"
                           "  <TileSets profile=\"geodetic\">\n"
                           "    <TileSet href=\"6\"  "
                           "units-per-pixel=\"0.703125\"     order=\"6\"/>\n"
@@ -445,7 +459,7 @@ BlobAssetAccessor::get(
     }
   }
 
-  // ---- Pattern 4: .png imagery tile ----
+  // ---- Pattern 4: imagery tile ----
   {
     int z = 0, x = 0, y = 0;
     if (matchImageryTile(url, z, x, y)) {
@@ -460,7 +474,7 @@ BlobAssetAccessor::get(
         blobIdx = 3;
 
       spdlog::warn(
-          "[BlobAssetAccessor] PNG match z={} x={} y={} -> blobIdx={} "
+          "[BlobAssetAccessor] Imagery match z={} x={} y={} -> blobIdx={} "
           "ptrNull={} blobSize={}",
           z,
           x,
@@ -488,10 +502,10 @@ BlobAssetAccessor::get(
             y);
       }
     } else {
-      if (cleanUrl.find(".png") != std::string::npos) {
+      if (cleanUrl.find(kImageryExt) != std::string::npos) {
         spdlog::error(
-            "[BlobAssetAccessor] PNG URL detected but matchImageryTile FAILED: "
-            "{}",
+            "[BlobAssetAccessor] Imagery URL detected but matchImageryTile "
+            "FAILED: {}",
             cleanUrl);
       }
     }

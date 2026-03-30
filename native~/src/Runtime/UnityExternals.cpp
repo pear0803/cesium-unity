@@ -91,8 +91,13 @@ void _blobPart3SanityCheck() {
   assert(terrainResp.contentType() == "application/vnd.quantized-mesh");
   assert(terrainResp.data().size() == 8);
 
-  BlobAssetResponse pngResp(dummy, 8, "http://local-blob/7/217/91.png");
-  assert(pngResp.contentType() == "image/png");
+#if defined(CESIUM_LOCAL_IMAGERY_WEBP) && CESIUM_LOCAL_IMAGERY_WEBP
+  BlobAssetResponse imgResp(dummy, 8, "http://local-blob/7/217/91.webp");
+  assert(imgResp.contentType() == "image/webp");
+#else
+  BlobAssetResponse imgResp(dummy, 8, "http://local-blob/7/217/91.png");
+  assert(imgResp.contentType() == "image/png");
+#endif
 
   BlobAssetResponse jsonResp(dummy, 8, "http://local-blob/layer.json");
   assert(jsonResp.contentType() == "application/json");

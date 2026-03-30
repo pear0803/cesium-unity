@@ -33,7 +33,11 @@ extern int g_imageryBlobSizes[4];
 //    */layer.json              -> terrain metadata (JSON)
 //    */{z}/{x}/{y}.terrain     -> quantized-mesh tile
 //    */tilemapresource.xml     -> imagery metadata (XML)
-//    */{z}/{x}/{y}.png         -> imagery tile (PNG)
+//    */{z}/{x}/{y}.png|.webp   -> imagery tile (format is selected at build time)
+//
+//  Imagery format selection:
+//    - Default: PNG
+//    - If CESIUM_LOCAL_IMAGERY_WEBP is defined and non-zero: WebP
 //
 //  Any other URL falls through to the HTTP fallback chain.
 // ============================================================
@@ -73,7 +77,7 @@ private:
   // Returns true and populates z/x/y if url matches */{z}/{x}/{y}.terrain
   static bool matchTerrainTile(const std::string& url, int& z, int& x, int& y);
 
-  // Returns true and populates z/x/y if url matches */{z}/{x}/{y}.png
+// Returns true and populates z/x/y if url matches */{z}/{x}/{y}.png (or .webp depending on build flag)
   static bool matchImageryTile(const std::string& url, int& z, int& x, int& y);
 
   // ---- Metadata generation ----
